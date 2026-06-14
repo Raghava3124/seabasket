@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, User, ShoppingCart, MapPin, Loader2 } from "lucide-react";
+import { Search, User, ShoppingCart, MapPin, Loader2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import AuthModal from "./AuthModal";
@@ -24,11 +24,20 @@ export default function Header() {
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
+  const [navCategories, setNavCategories] = useState<any[]>([]);
+
   useEffect(() => {
     fetch("/api/auth/me")
       .then((res) => res.json())
       .then((data) => {
         if (data.user) setUser(data.user);
+      })
+      .catch((err) => console.error(err));
+
+    fetch("/api/categories")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.categories) setNavCategories(data.categories);
       })
       .catch((err) => console.error(err));
   }, []);
@@ -186,10 +195,18 @@ export default function Header() {
             <div className="flex items-center gap-6">
               {/* Profile */}
               {user ? (
-                <Link href="/profile" className="flex items-center gap-2 cursor-pointer group">
-                  <User className="h-6 w-6 text-brand" />
-                  <span className="text-sm font-semibold hidden lg:block text-gray-900">Profile</span>
-                </Link>
+                <>
+                  {user.role === "ADMIN" && (
+                    <Link href="/admin" className="flex items-center gap-2 cursor-pointer group bg-brand/10 px-3 py-1.5 rounded-lg border border-brand/20 hover:bg-brand hover:text-white transition-all">
+                      <ShieldCheck className="h-5 w-5 text-brand group-hover:text-white" />
+                      <span className="text-sm font-bold text-brand group-hover:text-white hidden lg:block">Admin Console</span>
+                    </Link>
+                  )}
+                  <Link href="/profile" className="flex items-center gap-2 cursor-pointer group">
+                    <User className="h-6 w-6 text-brand" />
+                    <span className="text-sm font-semibold hidden lg:block text-gray-900">Profile</span>
+                  </Link>
+                </>
               ) : (
                 <button 
                   className="flex items-center gap-2 cursor-pointer group bg-transparent border-none p-0 m-0"
@@ -223,13 +240,11 @@ export default function Header() {
         {/* Secondary Nav / Categories */}
         <div className="border-t border-gray-100 hidden md:block">
           <div className="container mx-auto px-4 lg:px-8">
-            <nav className="flex items-center gap-8 h-12 text-sm font-medium text-gray-600">
-              <Link href="/category/fish" className="hover:text-brand transition-colors">Fresh Fish</Link>
-              <Link href="/category/prawns" className="hover:text-brand transition-colors">Premium Prawns</Link>
-              <Link href="/category/crabs" className="hover:text-brand transition-colors">Crabs & Lobsters</Link>
-              <Link href="/category/squid" className="hover:text-brand transition-colors">Squid & Octopus</Link>
-              <Link href="/category/exotic" className="hover:text-brand transition-colors">Exotic Catch</Link>
-              <Link href="/combos" className="hover:text-brand transition-colors text-brand font-semibold">Value Combos</Link>
+            <nav className="flex items-center gap-8 h-12 text-sm font-medium text-gray-600 overflow-x-auto">
+              {navCategories.map((cat) => (
+                <Link key={cat.id} href={`/category/${cat.slug}`} className="hover:text-brand transition-colors whitespace-nowrap">{cat.name}</Link>
+              ))}
+              <Link href="/combos" className="hover:text-brand transition-colors text-brand font-semibold whitespace-nowrap">Value Combos</Link>
             </nav>
           </div>
         </div>

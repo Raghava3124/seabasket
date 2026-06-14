@@ -2,7 +2,7 @@ import Redis from "ioredis";
 
 // Use real Redis if REDIS_URL is provided
 const redisClient = process.env.REDIS_URL 
-  ? new Redis(process.env.REDIS_URL) 
+  ? new Redis(process.env.REDIS_URL, { family: 4 }) 
   : null;
 
 // Mock Redis implementation fallback
