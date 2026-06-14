@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Note: SQLite does not support enums natively in Prisma, so we use String with default values.
+model User {
+  id        String    @id @default(cuid())
+  phone     String    @unique
+  name      String?
+  role      String    @default("CUSTOMER") // CUSTOMER, AGENT, ADMIN
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  addresses Address[]
+  orders    Order[]
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // Home, Work, Other
+  flat      String
+  street    String
+  area      String
+  landmark  String?
+  pincode   String
+  latitude  Float?
+  longitude Float?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  imageUrl  String?
+  products  Product[]
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  categoryId  String
+  category    Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  price       Float
+  stock       Int         @default(0)
+  imageUrl    String
+  grossWeight String?
+  netWeight   String?
+  isBestseller Boolean    @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  orderItems  OrderItem[]
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addressId     String
+  address       Address     @relation(fields: [addressId], references: [id])
+  status        String      @default("PENDING") // PENDING, PREPARING, DISPATCHED, DELIVERED, CANCELLED
+  totalAmount   Float
+  paymentId     String?     // Mock Razorpay ID
+  agentId       String?     // Delivery Agent ID
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  items         OrderItem[]
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float    // Price at the time of order
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String
+  subject   String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model StoreConfig {
+  id        String   @id @default(cuid())
+  latitude  Float
+  longitude Float
+  radiusKm  Float    @default(25)
+  address   String?
+  updatedAt DateTime @updatedAt
+}

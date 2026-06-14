@@ -9,8 +9,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        background: "#F8F8F8", // Licious uses off-white background
+        foreground: "#212121", // Dark text
+        brand: {
+          DEFAULT: "#D11243", // Licious Red
+          light: "#E83A64",
+          dark: "#A50D34",
+        },
+        surface: "#FFFFFF",
+      },
+      fontFamily: {
+        sans: ['var(--font-inter)', 'sans-serif'],
       },
     },
   },
