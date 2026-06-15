@@ -10,6 +10,17 @@ export async function GET(req: Request) {
     
     const session = JSON.parse(sessionCookie);
     
+    // Auto-heal missing user (e.g. after DB reset)
+    await prisma.user.upsert({
+      where: { id: session.userId },
+      update: {},
+      create: {
+        id: session.userId,
+        phone: session.phone || `mock-${Date.now()}`,
+        role: session.role || "CUSTOMER"
+      }
+    });
+    
     const addresses = await prisma.address.findMany({
       where: { userId: session.userId },
       orderBy: { createdAt: 'desc' }
@@ -27,8 +38,8 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ addresses: addressesWithStatus });
-  } catch (error) {
-    return NextResponse.json({ error: "Server Error" }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Server Error" }, { status: 500 });
   }
 }
 
@@ -39,6 +50,17 @@ export async function POST(req: Request) {
     
     const session = JSON.parse(sessionCookie);
     const body = await req.json();
+
+    // Auto-heal missing user (e.g. after DB reset)
+    await prisma.user.upsert({
+      where: { id: session.userId },
+      update: {},
+      create: {
+        id: session.userId,
+        phone: session.phone || `mock-${Date.now()}`,
+        role: session.role || "CUSTOMER"
+      }
+    });
 
     // Calculate distance and get warning if outside bounds, but DO NOT block saving
     let warning = null;
@@ -54,6 +76,8 @@ export async function POST(req: Request) {
       data: {
         userId: session.userId,
         type: body.type,
+        receiverName: body.receiverName,
+        receiverPhone: body.receiverPhone,
         flat: body.flat,
         street: body.street,
         area: body.area,
@@ -65,7 +89,8 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ address, warning });
-  } catch (error) {
-    return NextResponse.json({ error: "Server Error" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Address error:", error);
+    return NextResponse.json({ error: error.message || "Server Error" }, { status: 500 });
   }
 }

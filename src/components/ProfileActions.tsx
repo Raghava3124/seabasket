@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Shield } from "lucide-react";
+import { LogOut, Shield, Package } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -21,6 +21,14 @@ export default function ProfileActions({ role }: { role: string }) {
         <LogOut className="h-4 w-4" />
         Logout
       </button>
+
+      <Link 
+        href="/orders"
+        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 font-bold rounded-lg hover:bg-blue-100 transition-colors"
+      >
+        <Package className="h-4 w-4" />
+        My Orders
+      </Link>
 
       {role === "ADMIN" && (
         <Link 

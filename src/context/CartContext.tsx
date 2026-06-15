@@ -21,6 +21,7 @@ interface CartContextType {
   setIsCartOpen: (open: boolean) => void;
   totalItems: number;
   totalPrice: number;
+  liveData: Record<string, any>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -29,6 +30,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [liveData, setLiveData] = useState<Record<string, any>>({});
 
   // Load from Local Storage on mount
   useEffect(() => {
@@ -60,6 +62,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isInitialized) {
       localStorage.setItem("seabasket_cart", JSON.stringify(items));
+      // Fetch live stock / prices
+      if (items.length > 0) {
+        fetch("/api/cart-validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.liveData) setLiveData(data.liveData);
+          })
+          .catch(console.error);
+      } else {
+        setLiveData({});
+      }
     }
   }, [items, isInitialized]);
 
@@ -94,8 +111,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems([]);
   };
 
-  const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
-  const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const totalItems = items.reduce((sum, i) => {
+    const live = liveData[i.productId];
+    if (live === undefined) return sum + i.quantity; // before fetch
+    if (live === null) return sum; // deleted
+    return sum + i.quantity;
+  }, 0);
+
+  const totalPrice = items.reduce((sum, i) => {
+    const live = liveData[i.productId];
+    if (live === undefined) return sum + (i.price * i.quantity); // before fetch
+    if (live === null) return sum; // deleted
+    const effectivePrice = live.offerPrice || live.price;
+    return sum + (effectivePrice * i.quantity);
+  }, 0);
 
   return (
     <CartContext.Provider
@@ -109,6 +138,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setIsCartOpen,
         totalItems,
         totalPrice,
+        liveData,
       }}
     >
       {children}

@@ -11,9 +11,12 @@ interface ProductCardProps {
     name: string;
     description: string;
     price: number;
+    offerPrice?: number | null;
+    stock: number;
     imageUrl: string;
     grossWeight: string | null;
     netWeight: string | null;
+    netWeightGrams?: number | null;
   };
 }
 
@@ -23,11 +26,19 @@ export default function ProductCard({ product }: ProductCardProps) {
   const cartItem = items.find((i) => i.productId === product.id);
   const quantity = cartItem?.quantity || 0;
 
+  const effectivePrice = product.offerPrice || product.price;
+
+  const maxQuantity = product.netWeightGrams 
+    ? Math.floor(product.stock / product.netWeightGrams) 
+    : product.stock;
+
+  const isOutOfStock = product.stock <= 0 || maxQuantity <= 0;
+
   const handleAdd = () => {
     addToCart({
       productId: product.id,
       name: product.name,
-      price: product.price,
+      price: effectivePrice,
       imageUrl: product.imageUrl,
       weight: product.netWeight || "500g",
     });
@@ -71,10 +82,15 @@ export default function ProductCard({ product }: ProductCardProps) {
 
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="font-bold text-lg text-brand leading-none">₹{product.price}</span>
+              <span className="font-bold text-lg text-brand leading-none">₹{effectivePrice}</span>
+              {product.offerPrice && <span className="text-xs text-gray-400 line-through mt-0.5">₹{product.price}</span>}
             </div>
             
-            {quantity === 0 ? (
+            {isOutOfStock ? (
+              <button disabled className="bg-gray-200 text-gray-500 font-bold py-2 px-4 rounded-md shadow-sm text-sm">
+                Out of Stock
+              </button>
+            ) : quantity === 0 ? (
               <button 
                 onClick={handleAdd}
                 className="bg-brand hover:bg-brand-dark text-white font-bold py-2 px-6 rounded-md transition-colors shadow-sm"
@@ -92,7 +108,8 @@ export default function ProductCard({ product }: ProductCardProps) {
                 <span className="text-sm font-bold w-4 text-center text-brand">{quantity}</span>
                 <button 
                   onClick={handleIncrement}
-                  className="text-brand font-bold hover:bg-brand/20 p-1 rounded"
+                  disabled={quantity >= maxQuantity}
+                  className={`font-bold p-1 rounded ${quantity >= maxQuantity ? 'text-gray-400 cursor-not-allowed' : 'text-brand hover:bg-brand/20'}`}
                 >
                   <Plus className="h-4 w-4" />
                 </button>

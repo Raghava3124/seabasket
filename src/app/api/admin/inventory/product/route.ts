@@ -32,10 +32,29 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { categoryId, name, description, price, stock, imageUrl, grossWeight, netWeight, isBestseller } = body;
+    const { categoryId, name, description, price, offerPrice, stock, stockUnit, lowStockThreshold, imageUrl, grossWeight, netWeight, isBestseller } = body;
     
     if (!categoryId || !name || !price || !imageUrl) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Convert stock based on unit
+    let finalStock = parseInt(stock, 10) || 0;
+    if (stockUnit === "kg") {
+      finalStock = finalStock * 1000;
+    }
+
+    // Parse net weight strictly to grams (assuming admin writes it correctly or we parse digits)
+    let parsedNetWeightGrams = 0;
+    if (netWeight) {
+      const match = netWeight.match(/(\d+(\.\d+)?)/);
+      if (match) {
+        let val = parseFloat(match[1]);
+        if (netWeight.toLowerCase().includes("kg")) {
+          val = val * 1000;
+        }
+        parsedNetWeightGrams = Math.round(val);
+      }
     }
 
     const product = await prisma.product.create({
@@ -44,10 +63,13 @@ export async function POST(req: Request) {
         name,
         description,
         price: parseFloat(price),
-        stock: parseInt(stock, 10) || 0,
+        offerPrice: offerPrice ? parseFloat(offerPrice) : null,
+        stock: finalStock,
+        lowStockThreshold: parseInt(lowStockThreshold, 10) || 5000,
         imageUrl,
         grossWeight,
         netWeight,
+        netWeightGrams: parsedNetWeightGrams,
         isBestseller: Boolean(isBestseller)
       }
     });
@@ -76,10 +98,29 @@ export async function PUT(req: Request) {
 
   try {
     const body = await req.json();
-    const { id, categoryId, name, description, price, stock, imageUrl, grossWeight, netWeight, isBestseller } = body;
+    const { id, categoryId, name, description, price, offerPrice, stock, stockUnit, lowStockThreshold, imageUrl, grossWeight, netWeight, isBestseller } = body;
     
     if (!id || !categoryId || !name || !price) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Convert stock based on unit
+    let finalStock = parseInt(stock, 10) || 0;
+    if (stockUnit === "kg") {
+      finalStock = finalStock * 1000;
+    }
+
+    // Parse net weight strictly to grams
+    let parsedNetWeightGrams = 0;
+    if (netWeight) {
+      const match = netWeight.match(/(\d+(\.\d+)?)/);
+      if (match) {
+        let val = parseFloat(match[1]);
+        if (netWeight.toLowerCase().includes("kg")) {
+          val = val * 1000;
+        }
+        parsedNetWeightGrams = Math.round(val);
+      }
     }
 
     const data: any = {
@@ -87,9 +128,12 @@ export async function PUT(req: Request) {
       name,
       description,
       price: parseFloat(price),
-      stock: parseInt(stock, 10) || 0,
+      offerPrice: offerPrice ? parseFloat(offerPrice) : null,
+      stock: finalStock,
+      lowStockThreshold: parseInt(lowStockThreshold, 10) || 5000,
       grossWeight,
       netWeight,
+      netWeightGrams: parsedNetWeightGrams,
       isBestseller: Boolean(isBestseller)
     };
 

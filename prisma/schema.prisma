@@ -30,6 +30,8 @@ model Address {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String   // Home, Work, Other
+  receiverName String?
+  receiverPhone String?
   flat      String
   street    String
   area      String
@@ -49,6 +51,7 @@ model Category {
   slug      String    @unique
   imageUrl  String?
   products  Product[]
+  banners   Banner[]
 }
 
 model Product {
@@ -58,10 +61,13 @@ model Product {
   name        String
   description String
   price       Float
-  stock       Int         @default(0)
+  offerPrice  Float?
+  stock       Int         @default(0) // Now represents raw grams
+  lowStockThreshold Int   @default(5000) // Default 5kg threshold in grams
   imageUrl    String
   grossWeight String?
-  netWeight   String?
+  netWeight   String?     // Keeping for display (e.g., "500g", "1kg")
+  netWeightGrams Int?     // New field for exact stock deduction math
   isBestseller Boolean    @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -109,5 +115,15 @@ model StoreConfig {
   longitude Float
   radiusKm  Float    @default(25)
   address   String?
+  updatedAt DateTime @updatedAt
+}
+
+model Banner {
+  id        String   @id @default(cuid())
+  title     String
+  subtitle  String
+  categoryId String
+  category  Category @relation(fields: [categoryId], references: [id])
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

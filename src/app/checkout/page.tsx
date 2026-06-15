@@ -5,14 +5,14 @@ import { useState, useEffect } from "react";
 import { MapPin, ShieldCheck, CreditCard, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import AddressBook from "@/components/AddressBook";
+import toast from "react-hot-toast";
 
 export default function CheckoutPage() {
-  const { items, totalPrice, clearCart } = useCart();
+  const { items, totalPrice, clearCart, liveData } = useCart();
   const [addresses, setAddresses] = useState<any[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [showRazorpay, setShowRazorpay] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -29,8 +29,9 @@ export default function CheckoutPage() {
       if (res.ok) {
         const data = await res.json();
         setAddresses(data.addresses);
-        if (data.addresses.length > 0) {
-          setSelectedAddress(data.addresses[0].id);
+        const deliverableAddresses = data.addresses.filter((a: any) => a.isDeliverable !== false);
+        if (deliverableAddresses.length > 0) {
+          setSelectedAddress(deliverableAddresses[0].id);
         }
       }
     } catch (e) {
@@ -40,19 +41,36 @@ export default function CheckoutPage() {
     }
   };
 
+  const validItems = items.map(item => {
+    const live = liveData[item.productId];
+    if (live === null) return null; // deleted
+    if (live) {
+      const maxQty = live.netWeightGrams ? Math.floor(live.stock / live.netWeightGrams) : live.stock;
+      if (maxQty <= 0) return null; // out of stock
+      const effectivePrice = live.offerPrice || live.price;
+      return { ...item, quantity: Math.min(item.quantity, maxQty), price: effectivePrice };
+    }
+    return item; // fallback if not loaded yet
+  }).filter(Boolean) as any[];
+
+  const hasDroppedItems = items.length > 0 && validItems.length < items.length;
+
   const handlePaymentMock = async () => {
-    if (!selectedAddress) return;
+    if (!selectedAddress || validItems.length === 0) return;
     setProcessing(true);
     
-    // Simulate network delay for Razorpay processing
-    await new Promise(r => setTimeout(r, 2000));
+    // Auto-confirm for testing purposes
+    toast.success("Payments have been confirmed for testing purposes.", { duration: 4000 });
+    
+    // Simulate slight network delay
+    await new Promise(r => setTimeout(r, 1000));
     
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map(i => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
+          items: validItems.map(i => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
           addressId: selectedAddress,
           totalAmount: totalPrice,
           paymentId: `pay_${Math.random().toString(36).substring(7)}`,
@@ -61,7 +79,6 @@ export default function CheckoutPage() {
 
       if (res.ok) {
         clearCart();
-        setShowRazorpay(false);
         router.push("/profile");
       }
     } catch (e) {
@@ -80,44 +97,19 @@ export default function CheckoutPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left: Addresses */}
           <div className="lg:col-span-2 space-y-8">
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-brand" />
-                Select Delivery Address
-              </h2>
-              
-              {addresses.length === 0 ? (
-                <div>
-                  <p className="text-gray-500 mb-4">You have no saved addresses.</p>
-                  <AddressBook />
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {addresses.map((addr) => (
-                    <label key={addr.id} className={`flex items-start gap-4 p-4 border rounded-xl cursor-pointer transition-all ${selectedAddress === addr.id ? 'border-brand bg-brand/5 ring-1 ring-brand' : 'border-gray-200 hover:border-gray-300'}`}>
-                      <input 
-                        type="radio" 
-                        name="address" 
-                        value={addr.id} 
-                        checked={selectedAddress === addr.id}
-                        onChange={(e) => setSelectedAddress(e.target.value)}
-                        className="mt-1 text-brand focus:ring-brand"
-                      />
-                      <div>
-                        <h4 className="font-bold text-gray-900">{addr.type}</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {addr.flat}, {addr.street}, {addr.area}, Pincode: {addr.pincode}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
-                  <div className="pt-4 border-t border-gray-100">
-                     <p className="text-sm text-gray-500 font-medium mb-2">Need to deliver somewhere else?</p>
-                     <AddressBook />
-                  </div>
-                </div>
-              )}
-            </div>
+            <AddressBook 
+              selectionMode={true} 
+              selectedId={selectedAddress} 
+              onSelect={setSelectedAddress} 
+              title="Select Delivery Address"
+              onAddressesLoaded={(addrs) => {
+                setAddresses(addrs);
+                if(!selectedAddress) {
+                  const deliverable = addrs.filter(a => a.isDeliverable !== false);
+                  if (deliverable.length > 0) setSelectedAddress(deliverable[0].id);
+                }
+              }} 
+            />
           </div>
 
           {/* Right: Summary */}
@@ -125,8 +117,14 @@ export default function CheckoutPage() {
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm sticky top-24">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Order Summary</h2>
               
+              {hasDroppedItems && (
+                <div className="bg-orange-50 text-orange-700 p-3 rounded-lg text-xs font-medium mb-4">
+                  Some items in your cart are no longer available and have been removed.
+                </div>
+              )}
+
               <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto pr-2">
-                {items.map(item => (
+                {validItems.map(item => (
                   <div key={item.productId} className="flex justify-between items-start text-sm">
                     <div className="flex-1 pr-4">
                       <p className="font-medium text-gray-900 leading-tight">{item.name}</p>
@@ -153,11 +151,11 @@ export default function CheckoutPage() {
               </div>
 
               <button 
-                disabled={!selectedAddress}
-                onClick={() => setShowRazorpay(true)}
+                disabled={!selectedAddress || validItems.length === 0 || processing}
+                onClick={handlePaymentMock}
                 className="w-full bg-brand hover:bg-brand-dark text-white font-bold py-4 rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-brand/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Proceed to Pay
+                {processing ? <Loader2 className="h-5 w-5 animate-spin" /> : validItems.length === 0 ? "Cart is empty" : "Proceed to Pay"}
               </button>
               
               <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-400 font-medium">
@@ -169,39 +167,6 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* Mock Razorpay Modal */}
-      {showRazorpay && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl w-full max-w-sm shadow-2xl overflow-hidden relative animate-in zoom-in-95 duration-200">
-            <div className="bg-[#0B3B60] p-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                <span className="font-bold">Razorpay Mock UI</span>
-              </div>
-              <span className="font-black text-xl">₹{totalPrice}</span>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-600 text-sm mb-6 text-center">
-                This is a mock payment gateway since Razorpay keys are not provided.
-              </p>
-              <button 
-                onClick={handlePaymentMock}
-                disabled={processing}
-                className="w-full bg-[#0B3B60] text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-[#07243c] transition-colors"
-              >
-                {processing ? <Loader2 className="h-5 w-5 animate-spin" /> : "Simulate Successful Payment"}
-              </button>
-              <button 
-                onClick={() => setShowRazorpay(false)}
-                disabled={processing}
-                className="w-full mt-3 text-gray-500 font-semibold py-2 hover:text-gray-900"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

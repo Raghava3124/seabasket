@@ -5,7 +5,7 @@ import { useCart } from "@/context/CartContext";
 import Link from "next/link";
 
 export default function CartSidebar() {
-  const { isCartOpen, setIsCartOpen, items, updateQuantity, totalPrice, totalItems } = useCart();
+  const { isCartOpen, setIsCartOpen, items, updateQuantity, totalPrice, totalItems, liveData, removeFromCart } = useCart();
 
   if (!isCartOpen) return null;
 
@@ -49,36 +49,55 @@ export default function CartSidebar() {
             </div>
           ) : (
             <div className="space-y-4">
-              {items.map((item) => (
-                <div key={item.productId} className="flex gap-4 p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
-                  <img src={item.imageUrl} alt={item.name} className="w-20 h-20 object-cover rounded-lg" />
-                  <div className="flex-1 flex flex-col justify-between">
-                    <div>
-                      <h3 className="font-bold text-gray-900 text-sm leading-tight">{item.name}</h3>
-                      <p className="text-xs text-gray-500 mt-1">{item.weight}</p>
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="font-black text-brand">₹{item.price}</p>
-                      
-                      <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1">
-                        <button 
-                          onClick={() => updateQuantity(item.productId, item.quantity - 1)}
-                          className="text-brand font-bold hover:bg-gray-200 p-0.5 rounded"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
-                        <button 
-                          onClick={() => updateQuantity(item.productId, item.quantity + 1)}
-                          className="text-brand font-bold hover:bg-gray-200 p-0.5 rounded"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
+              {items.map((item) => {
+                const live = liveData[item.productId];
+                const isUnavailable = live === null;
+                const effectivePrice = live ? (live.offerPrice || live.price) : item.price;
+                const maxQuantity = live && live.netWeightGrams ? Math.floor(live.stock / live.netWeightGrams) : (live ? live.stock : item.quantity);
+                const isOutOfStock = live && (live.stock <= 0 || maxQuantity <= 0);
+
+                return (
+                  <div key={item.productId} className={`flex gap-4 p-3 bg-white border border-gray-100 rounded-xl shadow-sm ${isUnavailable ? 'opacity-60' : ''}`}>
+                    <img src={item.imageUrl} alt={item.name} className="w-20 h-20 object-cover rounded-lg" />
+                    <div className="flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start">
+                          <h3 className="font-bold text-gray-900 text-sm leading-tight pr-2">{item.name}</h3>
+                          <button onClick={() => removeFromCart(item.productId)} className="text-gray-400 hover:text-red-500">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">{item.weight}</p>
+                        {isUnavailable && <p className="text-xs font-bold text-red-500 mt-1">Unavailable - Removed</p>}
+                        {isOutOfStock && !isUnavailable && <p className="text-xs font-bold text-orange-500 mt-1">Out of Stock</p>}
                       </div>
+                      
+                      {!isUnavailable && (
+                        <div className="flex items-center justify-between mt-2">
+                          <p className="font-black text-brand">₹{effectivePrice}</p>
+                          
+                          <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1">
+                            <button 
+                              onClick={() => updateQuantity(item.productId, item.quantity - 1)}
+                              className="text-brand font-bold hover:bg-gray-200 p-0.5 rounded"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
+                            <button 
+                              onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                              disabled={item.quantity >= maxQuantity}
+                              className={`font-bold p-0.5 rounded ${item.quantity >= maxQuantity ? 'text-gray-300 cursor-not-allowed' : 'text-brand hover:bg-gray-200'}`}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -16,26 +16,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid order data" }, { status: 400 });
     }
 
-    const order = await prisma.order.create({
-      data: {
-        userId: session.userId,
-        addressId,
-        totalAmount,
-        paymentId,
-        status: "PREPARING",
-        items: {
-          create: items.map((item: any) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: item.price,
-          }))
+    const order = await prisma.$transaction(async (tx) => {
+      for (const item of items) {
+        const product = await tx.product.findUnique({ where: { id: item.productId } });
+        if (!product) throw new Error(`Product ${item.productId} not found`);
+        
+        const deduction = item.quantity * (product.netWeightGrams || 1);
+        if (product.stock < deduction) {
+          throw new Error(`Insufficient stock for ${product.name}`);
         }
+
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: product.stock - deduction }
+        });
       }
+
+      return await tx.order.create({
+        data: {
+          userId: session.userId,
+          addressId,
+          totalAmount,
+          paymentId,
+          status: "PREPARING",
+          items: {
+            create: items.map((item: any) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+              price: item.price,
+            }))
+          }
+        }
+      });
     });
 
     return NextResponse.json({ success: true, orderId: order.id });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Order Creation Error:", error);
-    return NextResponse.json({ error: "Server Error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Server Error" }, { status: 500 });
   }
 }
