@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Package, Truck, CheckCircle2, LayoutDashboard, Loader2, Tags, ShoppingBag, Plus, Trash2, Image as ImageIcon, Edit, MessageSquare, MapPin, AlertTriangle } from "lucide-react";
+import { Package, Truck, CheckCircle2, LayoutDashboard, Loader2, Tags, ShoppingBag, Plus, Trash2, Image as ImageIcon, Edit, MessageSquare, MapPin, AlertTriangle, Eye, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
 
@@ -23,6 +23,26 @@ export default function AdminDashboard() {
   const [formLat, setFormLat] = useState<number>(16.9834);
   const [formLng, setFormLng] = useState<number>(81.7836);
   const [formAddress, setFormAddress] = useState<string>("");
+
+  // UI States
+  const [messageTab, setMessageTab] = useState<"UNRESOLVED" | "RESOLVED">("UNRESOLVED");
+  const [orderSearchQuery, setOrderSearchQuery] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState<"ALL" | "PENDING" | "DISPATCHED" | "DELIVERED">("ALL");
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+
+  // Calculate distance utility
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return (R * c).toFixed(1);
+  };
 
   useEffect(() => {
     if (storeConfig) {
@@ -241,6 +261,19 @@ export default function AdminDashboard() {
     fetchData();
   };
 
+  const toggleFeedbackResolved = async (id: string, resolved: boolean) => {
+    try {
+      const res = await fetch(`/api/feedback`, { 
+        method: "PUT", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, resolved })
+      });
+      if (res.ok) fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const deleteFeedback = async (id: string) => {
     if (!confirm("Delete this message?")) return;
     await fetch("/api/feedback", {
@@ -354,39 +387,110 @@ export default function AdminDashboard() {
         {/* --- ORDERS TAB --- */}
         {activeTab === "ORDERS" && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-6 border-b border-gray-200 bg-gray-50">
+            <div className="p-6 border-b border-gray-200 bg-gray-50 space-y-4">
               <h2 className="text-lg font-bold text-gray-900">Live Orders</h2>
+              
+              <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+                <div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+                  {["ALL", "PENDING", "PREPARING", "DISPATCHED", "DELIVERED", "CANCELLED"].map(status => (
+                    <button
+                      key={status}
+                      onClick={() => setOrderStatusFilter(status as any)}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${orderStatusFilter === status ? 'bg-[#0B3B60] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search by Order ID, Name, Phone..."
+                  value={orderSearchQuery}
+                  onChange={(e) => setOrderSearchQuery(e.target.value)}
+                  className="w-full md:w-64 px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0B3B60]"
+                />
+              </div>
             </div>
+            
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50/50 text-gray-500 text-xs uppercase tracking-wider">
-                    <th className="p-4 font-semibold">Order ID</th>
-                    <th className="p-4 font-semibold">Customer</th>
+                    <th className="p-4 font-semibold w-48">Order Details</th>
+                    <th className="p-4 font-semibold w-48">Customer & Delivery</th>
+                    <th className="p-4 font-semibold w-48">Items</th>
                     <th className="p-4 font-semibold">Total</th>
                     <th className="p-4 font-semibold">Status</th>
                     <th className="p-4 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
-                  {orders.map(order => (
+                  {orders
+                    .filter(o => orderStatusFilter === "ALL" || o.status === orderStatusFilter)
+                    .filter(o => {
+                      if (!orderSearchQuery) return true;
+                      const q = orderSearchQuery.toLowerCase();
+                      const name = (o.address?.receiverName || o.user?.name || "").toLowerCase();
+                      return o.id.toLowerCase().includes(q) || o.user.phone.includes(q) || name.includes(q) || (o.address?.receiverPhone && o.address.receiverPhone.includes(q));
+                    })
+                    .map(order => (
                     <tr key={order.id} className="hover:bg-gray-50/50">
-                      <td className="p-4 font-medium">#{order.id.slice(-6).toUpperCase()}</td>
-                      <td className="p-4">{order.user.name || "Guest"} <span className="text-xs text-gray-500 block">+91 {order.user.phone}</span></td>
-                      <td className="p-4 font-bold">₹{order.totalAmount}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${order.status === 'PREPARING' ? 'bg-orange-100 text-orange-700' :
-                            order.status === 'DISPATCHED' ? 'bg-blue-100 text-blue-700' :
-                              order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                          }`}>{order.status}</span>
+                      <td className="p-4 align-top">
+                        <span className="font-medium text-gray-900 block mb-1">#{order.id.slice(-6).toUpperCase()}</span>
+                        <span className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleString()}</span>
                       </td>
-                      <td className="p-4">
-                        {order.status === 'PREPARING' && (
-                          <button onClick={() => updateOrderStatus(order.id, 'DISPATCHED')} className="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded transition-colors" title="Dispatch"><Truck className="h-4 w-4" /></button>
+                      <td className="p-4 align-top">
+                        <p className="font-bold text-gray-900 mb-0.5">{order.address?.receiverName || order.user.name || "Guest"}</p>
+                        <p className="text-xs text-gray-600 mb-2">+91 {order.address?.receiverPhone || order.user.phone}</p>
+                        {order.address && (
+                          <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded border border-gray-100 leading-relaxed">
+                            <span className="font-semibold text-gray-700 block mb-1">Delivery Address:</span>
+                            {order.address.flat}, {order.address.street},<br/>
+                            {order.address.area}, Pincode: {order.address.pincode}
+                            {order.address.latitude && order.address.longitude && (
+                              <div className="mt-1 text-xs text-brand font-bold">
+                                {storeConfig?.latitude ? `📍 ${calculateDistance(storeConfig.latitude, storeConfig.longitude, order.address.latitude, order.address.longitude)} km away` : '📍 Map coordinates saved'}
+                              </div>
+                            )}
+                          </div>
                         )}
-                        {order.status === 'DISPATCHED' && (
-                          <button onClick={() => updateOrderStatus(order.id, 'DELIVERED')} className="bg-green-500 hover:bg-green-600 text-white p-1.5 rounded transition-colors" title="Deliver"><CheckCircle2 className="h-4 w-4" /></button>
-                        )}
+                      </td>
+                      <td className="p-4 align-top">
+                        <div className="space-y-1">
+                          {order.items?.map((item: any) => (
+                            <div key={item.id} className="text-xs flex justify-between gap-2 border-b border-gray-100 pb-1 last:border-0">
+                              <span className="text-gray-700 line-clamp-2 leading-tight flex-1">{item.quantity}x {item.product.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="p-4 align-top font-bold text-gray-900">
+                        ₹{order.totalAmount}
+                      </td>
+                      <td className="p-4 align-top">
+                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${
+                          order.status === 'PREPARING' ? 'bg-orange-100 text-orange-700' :
+                          order.status === 'DISPATCHED' ? 'bg-blue-100 text-blue-700' :
+                          order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' : 
+                          order.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                        }`}>{order.status}</span>
+                      </td>
+                      <td className="p-4 align-top">
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <button onClick={() => setSelectedOrder(order)} className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-1 rounded transition-colors flex items-center gap-1" title="View Details">
+                            <Eye className="h-3 w-3" /> DETAILS
+                          </button>
+                          
+                          {order.status === 'PENDING' && (
+                            <button onClick={() => updateOrderStatus(order.id, 'PREPARING')} className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold px-2 py-1 rounded transition-colors" title="Start Preparing">PREPARE</button>
+                          )}
+                          {order.status === 'PREPARING' && (
+                            <button onClick={() => updateOrderStatus(order.id, 'DISPATCHED')} className="bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded transition-colors" title="Dispatch"><Truck className="h-3 w-3 inline mr-1" />DISPATCH</button>
+                          )}
+                          {order.status === 'DISPATCHED' && (
+                            <button onClick={() => updateOrderStatus(order.id, 'DELIVERED')} className="bg-green-500 hover:bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded transition-colors" title="Deliver"><CheckCircle2 className="h-3 w-3 inline mr-1" />DELIVERED</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -657,24 +761,54 @@ export default function AdminDashboard() {
         {/* --- MESSAGES TAB --- */}
         {activeTab === "MESSAGES" && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-6 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+            <div className="p-6 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <h2 className="text-lg font-bold text-gray-900">Customer Messages & Feedback</h2>
+              <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+                <button
+                  onClick={() => setMessageTab("UNRESOLVED")}
+                  className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${messageTab === "UNRESOLVED" ? "bg-red-50 text-red-600" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Unresolved
+                </button>
+                <button
+                  onClick={() => setMessageTab("RESOLVED")}
+                  className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${messageTab === "RESOLVED" ? "bg-green-50 text-green-600" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Resolved
+                </button>
+              </div>
             </div>
             <div className="p-6">
-              {feedbacks.length === 0 ? (
-                <p className="text-gray-500">No messages found.</p>
+              {feedbacks.filter(fb => messageTab === "RESOLVED" ? fb.resolved : !fb.resolved).length === 0 ? (
+                <p className="text-gray-500">No {messageTab.toLowerCase()} messages found.</p>
               ) : (
                 <div className="space-y-4">
-                  {feedbacks.map(fb => (
-                    <div key={fb.id} className="border border-gray-200 rounded-xl p-4 shadow-sm bg-gray-50/50">
+                  {feedbacks
+                    .filter(fb => messageTab === "RESOLVED" ? fb.resolved : !fb.resolved)
+                    .map(fb => (
+                    <div key={fb.id} className={`border rounded-xl p-4 shadow-sm ${fb.resolved ? 'border-green-200 bg-green-50/30' : 'border-gray-200 bg-gray-50/50'}`}>
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h3 className="font-bold text-gray-900">{fb.subject}</h3>
+                          <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                            {fb.subject}
+                            {fb.resolved && <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded uppercase">Resolved</span>}
+                          </h3>
                           <p className="text-sm text-gray-600">{fb.name} • {fb.email} • {fb.phone}</p>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <span className="text-xs text-gray-400">{new Date(fb.createdAt).toLocaleDateString()}</span>
-                          <button onClick={() => deleteFeedback(fb.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Delete Message">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 mr-2">{new Date(fb.createdAt).toLocaleDateString()}</span>
+                          
+                          {!fb.resolved ? (
+                            <button onClick={() => toggleFeedbackResolved(fb.id, true)} className="text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors text-xs font-bold flex items-center gap-1" title="Mark as Resolved">
+                              <CheckCircle2 className="h-4 w-4" /> Resolve
+                            </button>
+                          ) : (
+                            <button onClick={() => toggleFeedbackResolved(fb.id, false)} className="text-orange-600 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg transition-colors text-xs font-bold" title="Mark as Unresolved">
+                              Reopen
+                            </button>
+                          )}
+
+                          <button onClick={() => deleteFeedback(fb.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors" title="Delete Message">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
@@ -886,6 +1020,108 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+      
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-white shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-brand/10 text-brand rounded-xl flex items-center justify-center shrink-0">
+                  <Package className="h-5 w-5 sm:h-6 sm:w-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-2xl font-black text-gray-900 leading-tight">Order #{selectedOrder.id.slice(-6).toUpperCase()}</h2>
+                  <p className="text-gray-500 font-medium text-xs sm:text-sm">{new Date(selectedOrder.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedOrder(null)}
+                className="p-2 bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900 rounded-full transition-colors shrink-0"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Customer Information</h3>
+                  <div className="space-y-1">
+                    <p className="font-bold text-gray-900 text-lg">{selectedOrder.user.name || "Guest"}</p>
+                    <p className="text-gray-600 font-medium">+91 {selectedOrder.user.phone}</p>
+                    {selectedOrder.user.email && <p className="text-gray-600 text-sm">{selectedOrder.user.email}</p>}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Delivery Information</h3>
+                  {selectedOrder.address ? (
+                    <div className="space-y-2">
+                      <p className="font-bold text-gray-900">{selectedOrder.address.receiverName || selectedOrder.user.name || "Guest"} <span className="text-gray-500 text-sm font-normal">({selectedOrder.address.type})</span></p>
+                      <p className="text-gray-600 text-sm">+91 {selectedOrder.address.receiverPhone || selectedOrder.user.phone}</p>
+                      <p className="text-gray-600 text-sm leading-relaxed">
+                        {selectedOrder.address.flat}, {selectedOrder.address.street}<br/>
+                        {selectedOrder.address.area}<br/>
+                        Pincode: {selectedOrder.address.pincode}
+                      </p>
+                      {selectedOrder.address.latitude && selectedOrder.address.longitude && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <p className="text-xs font-bold text-brand flex items-center gap-1">
+                            <MapPin className="h-4 w-4" />
+                            {storeConfig?.latitude ? `${calculateDistance(storeConfig.latitude, storeConfig.longitude, selectedOrder.address.latitude, selectedOrder.address.longitude)} km from store` : 'Coordinates saved'}
+                          </p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">Lat: {selectedOrder.address.latitude.toFixed(4)}, Lng: {selectedOrder.address.longitude.toFixed(4)}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 italic">No address provided</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <div className="bg-gray-50 px-5 py-3 border-b border-gray-200">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Order Items</h3>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {selectedOrder.items?.map((item: any) => (
+                    <div key={item.id} className="p-5 flex items-center gap-4 bg-white">
+                      <div className="h-16 w-16 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                        {item.product.imageUrl ? (
+                          <img src={item.product.imageUrl} alt={item.product.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-gray-400"><ImageIcon className="h-6 w-6" /></div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-gray-900">{item.product.name}</h4>
+                        <p className="text-sm text-gray-500">{item.product.netWeight}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-900">₹{item.price}</p>
+                        <p className="text-xs text-gray-500 font-medium">Qty: {item.quantity}</p>
+                      </div>
+                      <div className="text-right pl-4 border-l border-gray-100 min-w-[80px]">
+                        <p className="font-black text-brand text-lg">₹{item.price * item.quantity}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-gray-50 p-5 border-t border-gray-200 flex justify-between items-center">
+                  <span className="font-bold text-gray-700">Total Amount</span>
+                  <span className="text-2xl font-black text-gray-900">₹{selectedOrder.totalAmount}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

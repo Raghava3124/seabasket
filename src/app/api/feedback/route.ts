@@ -55,3 +55,22 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+
+export async function PUT(req: Request) {
+  try {
+    const { id, resolved } = await req.json();
+    if (!id || typeof resolved !== 'boolean') {
+      return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+    }
+
+    const feedback = await prisma.feedback.update({
+      where: { id },
+      data: { resolved },
+    });
+
+    return NextResponse.json({ success: true, feedback });
+  } catch (error) {
+    console.error("Error updating feedback:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}

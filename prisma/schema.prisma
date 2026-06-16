@@ -18,6 +18,10 @@ model User {
   id        String    @id @default(cuid())
   phone     String    @unique
   name      String?
+  email     String?
+  dob       String?
+  anniversary String?
+  gender    String?
   role      String    @default("CUSTOMER") // CUSTOMER, AGENT, ADMIN
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -106,6 +110,7 @@ model Feedback {
   phone     String
   subject   String
   message   String
+  resolved  Boolean  @default(false)
   createdAt DateTime @default(now())
 }
 

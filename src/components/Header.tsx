@@ -244,7 +244,6 @@ export default function Header() {
               {navCategories.map((cat) => (
                 <Link key={cat.id} href={`/category/${cat.slug}`} className="hover:text-brand transition-colors whitespace-nowrap">{cat.name}</Link>
               ))}
-              <Link href="/combos" className="hover:text-brand transition-colors text-brand font-semibold whitespace-nowrap">Value Combos</Link>
             </nav>
           </div>
         </div>

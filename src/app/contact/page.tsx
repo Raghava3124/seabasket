@@ -167,7 +167,11 @@ export default function ContactPage() {
                         type="tel"
                         name="phone"
                         value={formData.phone}
-                        onChange={handleInputChange}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setFormData(prev => ({ ...prev, phone: val }));
+                        }}
+                        maxLength={10}
                         placeholder="e.g. 9876543210"
                         className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:border-brand"
                         required
